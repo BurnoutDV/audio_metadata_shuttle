@@ -20,18 +20,6 @@
 #
 # @license GPL-3.0-only <https://www.gnu.org/licenses/gpl-3.0.en.html>
 
-# https://mutagen.readthedocs.io/en/latest/user/gettingstarted.html
-
-import logging
-from audiolib import test_all
-from statics import __version__, __appauthor__, __appname__
-from gui_logic import Run
-
-logging.basicConfig(format='[%(asctime)s] %(levelname)s:%(message)s', level=logging.INFO)
-#logging.basicConfig(format='%(message)s', level=logging.DEBUG)
-
-
-if __name__ == "__main__":
-    test_all()
-    #Run()
-
+__version__ = "0.01"
+__appname__ = "Audio Metatag Shuttle"
+__appauthor__ = "BurnoutDV"

@@ -32,7 +32,9 @@ remember having copied in the first place.
 """
 import os
 import sys
+import copy
 import logging
+from math import ceil, floor
 from statistics import mean
 from collections import defaultdict
 
@@ -67,7 +69,6 @@ def simple_console_view(keys: list, data: list, max_width=0, *column_widths: int
     col, row = get_terminal_size()
     if max_width == 0 or max_width > col:
         max_width = col
-
     # take inventory and average around
     avg_len = defaultdict(float)
     max_len = defaultdict(float)
@@ -75,22 +76,29 @@ def simple_console_view(keys: list, data: list, max_width=0, *column_widths: int
     stat = defaultdict(int)
     for line in data:
         for idx, column in line.items():
+            stat[idx] += 1
             if idx in keys:
                 avg_len[idx] = len(column) if 0.0 else avg_len[idx] + (len(column))/2
                 max_len[idx] = len(column) if len(column) > max_len[idx] else max_len[idx]  # else without sense
-                stat[idx] += 1
 
-    overshoot = (max_width - sum([v for v in max_len.values()]) + len(keys)*COL_SPACING - COL_SPACING) * -1
-    if overshoot > 0:
+    # thin out keys for things that do not exist in the data (aka. ignored headers duo inexisting data)
+    new_keys = []
+    for key in keys:
+        if stat[key] > 0:
+            new_keys.append(key)
+    keys = new_keys
+
+    overshot = (max_width - sum([v for v in max_len.values()]) - (len(keys)-1)*COL_SPACING) * -1
+    if overshot > 0:
         over_average = mean([v for v in max_len.values()])
         short_cols = [idx for idx, value in avg_len.items() if value > over_average]
         num_short_col = len(short_cols)
-        avg_delta = overshoot/num_short_col
+        avg_delta = ceil(overshot/num_short_col)
         while True:  # a makeshift do..until loop, because i really want a feet controlled loop
             # ? what it does do, it filters out the columns that are in average to long but cannot stand getting
             # ? cut short, there are probably some edge cases were this might fail hard
             short_cols = [idx for idx in short_cols if max_len[idx] - AVG_TOLERANCE > avg_delta]
-            avg_delta = overshoot / num_short_col
+            avg_delta = ceil(overshot / num_short_col)
             if len(short_cols) == num_short_col:
                 break
             else:
@@ -98,20 +106,62 @@ def simple_console_view(keys: list, data: list, max_width=0, *column_widths: int
         corrected = 0
         for idx in keys:
             if idx in short_cols:
-                set_len[idx] = int(round(max_len[idx] - avg_delta, 0))
+                # ! average difference
+                set_len[idx] = int(max_len[idx] - avg_delta)
+                #set_len[idx] = int(round(max_len[idx]-(max_len[idx]/num_short_col), 0))
                 corrected += max_len[idx] - set_len[idx]
             else:
-                set_len[idx] = int(round(max_len[idx], 0))
-        if corrected > over_average:
-            set_len[keys[-1]] = int(round(set_len[keys[-1]] - (over_average-corrected), 0))
-    else:
+                set_len[idx] = int(max_len[idx])
+        if corrected > overshot:  # we overcorrected, adding some stuff to the smallest columns
+            smallest = keys[0]
+            for idx in short_cols:
+                if set_len[smallest] > set_len[idx]:
+                    smallest = idx
+            set_len[smallest] = set_len[smallest] + (overshot-corrected)
+        # it should never undershot
+    elif overshot < 0:
+        # includes length of headers as well
+        max2_len = copy.copy(max_len)
+        for idx in keys:
+            max2_len[idx] = len(idx) if len(idx) > max2_len[idx] else max2_len[idx]
+        new_shot = (max_width - sum([v for v in max2_len.values()]) - (len(keys)-1)*COL_SPACING) * -1
+        if new_shot <= 0:  # enough space to add to all headers AND additional space (might be 0)
+            max_len = max2_len
+            overshot = new_shot
+            avg_add = floor(overshot/len(keys)*-1)
+            for idx in keys:
+                set_len[idx] = int(max_len[idx] + avg_add)
+            # a convoluted way to reduce the longest element by 1
+            gen_width = sum([x for x in set_len.values()])
+            if gen_width > max_width:
+                biggest = keys[0]
+                for idx in keys:
+                    if set_len[biggest] > set_len[idx]:
+                        biggest = idx
+                set_len[biggest] -= gen_width - max_width
+        else:  # overshot is not enough to add enough empty space to all columns so its headers can be displayed
+            free_space = overshot * -1
+            while True:  # uses up the free space as much as possible
+                for idx in keys:
+                    if len(idx) > max_len[idx]:
+                        delta = len(idx) - max_len[idx]
+                        if delta < free_space:
+                            max_len[idx] += delta
+                            free_space -= delta
+                        else: # just use all the space we got left
+                            max_len[idx] += free_space
+                            free_space = 0
+                    set_len[idx] = int(max_len[idx])
+                if free_space <= 0:
+                    break
+    else:  # exactly on point
         set_len = util_convert_to_dict_of_int(max_len)  # for the case that everything would fit nicely it will just put it as it
         # todo: insert stretch functionality here
 
     header = ""
     for prop in keys:
-        header += f"{prop} [{stat[col]}]{' '*set_len[prop]}"[:set_len[prop]] + " "*COL_SPACING
-    print(header[:-1])
+        header += f"{prop} [{stat[prop]}]{' '*set_len[prop]}"[:set_len[prop]] + " "*COL_SPACING
+    print(header[:-COL_SPACING])
 
     for line in data:
         body = ""

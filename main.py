@@ -24,6 +24,8 @@
 
 import logging
 from audiolib import test_all
+import sys
+from pathlib import Path
 from statics import __version__, __appauthor__, __appname__
 from gui_logic import Run
 
@@ -32,6 +34,19 @@ logging.basicConfig(format='[%(asctime)s] %(levelname)s:%(message)s', level=logg
 
 
 if __name__ == "__main__":
-    test_all()
-    #Run()
+    if len(sys.argv) > 0:
+        if sys.argv[1] == "gui":
+            Run()
+        elif len(sys.argv) == 2:
+            print(sys.argv)
+            basepath = sys.argv[1]
+            if not Path(basepath).is_dir():
+                logging.critical("Path cannot be accessed")
+                basepath = "."
+
+            test_all(basepath)
+        else:
+            test_all()
+    else:
+        Run()
 

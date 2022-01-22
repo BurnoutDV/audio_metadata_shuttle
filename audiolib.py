@@ -24,7 +24,7 @@
 import sys
 from pathlib import Path
 from collections import defaultdict
-from statics import __version__, __appauthor__, __appname__
+from statics import __version__, __appauthor__, __appname__, filetype_filter
 import mutagen, mutagen.easyid3
 import logging
 import re
@@ -34,12 +34,10 @@ from console_util import simple_console_view
 logger = logging.getLogger(__name__)
 
 __BDV_TAGS__ = ["title", "artist", "album", "tracknumber", "discnumber", "genre", "description", "version", "date"]
-filetype_filter = ["[mM][pP][3]"]
 
 
 def _generate_filetype_pattern(*filetypes):
-    global filetype_filter
-    filetype_filter = []
+    local_file_filter = []
     for key in filetypes:
         singular_pattern = "*."
         for char in key:
@@ -47,7 +45,8 @@ def _generate_filetype_pattern(*filetypes):
                 singular_pattern += f"[{char.lower()}{char.upper()}]"
             else:
                 singular_pattern += f"[{char}]"
-        filetype_filter.append(singular_pattern)
+        local_file_filter.append(singular_pattern)
+    return local_file_filter
 
 
 def multi_crawl_folder(folder_path, *filetypes) -> list:
@@ -58,7 +57,6 @@ def multi_crawl_folder(folder_path, *filetypes) -> list:
     :rtype: list[Path]
     :return: a list of which each element is a Path-Object to the found files
     """
-    global filetype_filter
     if not filetypes:
         filetypes = filetype_filter
     all_paths = []
@@ -134,19 +132,13 @@ def count_trackvariants(folder_path, file_filter="*.[mM][pP][3]"):
 __AUDIO_FILETYPES__ = {"ogg": None, "aac": None, "m4a": None, "mp3": standardize_id3, "flac": None}
 
 
-def test_all():
-    _generate_filetype_pattern(*__AUDIO_FILETYPES__.keys())
-    if len(sys.argv) == 2:
-        basepath = sys.argv[1]
-        if not Path(basepath).is_dir():
-            print("Given Path cannot be accessed")
-            exit()
-    else:
-        basepath = "."
+def test_all(basepath="."):
+    print(basepath)
+    custome_file_filter = _generate_filetype_pattern(*__AUDIO_FILETYPES__.keys())
     # recurse_folder(base_path)
     start = time.time_ns()  # ! time keeping start
 
-    all_files = multi_crawl_folder(basepath, *filetype_filter)
+    all_files = multi_crawl_folder(basepath, *custome_file_filter)
     all_metadata = []
     for sng_file in all_files:
         if __AUDIO_FILETYPES__[str(sng_file.suffix[1:]).lower()] is not None:

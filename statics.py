@@ -23,3 +23,4 @@
 __version__ = "0.01"
 __appname__ = "Audio Metatag Shuttle"
 __appauthor__ = "BurnoutDV"
+filetype_filter = ["[mM][pP][3]"]

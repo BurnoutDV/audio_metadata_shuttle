@@ -34,11 +34,10 @@ logging.basicConfig(format='[%(asctime)s] %(levelname)s:%(message)s', level=logg
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 0:
+    if len(sys.argv) > 1:
         if sys.argv[1] == "gui":
             Run()
         elif len(sys.argv) == 2:
-            print(sys.argv)
             basepath = sys.argv[1]
             if not Path(basepath).is_dir():
                 logging.critical("Path cannot be accessed")

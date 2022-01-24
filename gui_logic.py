@@ -23,12 +23,12 @@
 import sys
 from gui_description import ShuttleMainWindow
 from statics import __version__, __appauthor__, __appname__
-from PySide2 import QtWidgets, QtCore
-from PySide2.QtGui import QIcon
+from PySide6 import QtWidgets, QtCore
+from PySide6.QtGui import QIcon
 
 # Windows Stuff for Building under Windows
 try:
-    from PySide2.QtWinExtras import QtWin
+    from PySide6.QtWinExtras import QtWin
     myappid = f'BDV.shuttle.{__version__}'
     QtWin.setCurrentProcessExplicitAppUserModelID(myappid)
 except ImportError:

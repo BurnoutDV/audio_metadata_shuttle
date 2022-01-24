@@ -24,9 +24,9 @@ import logging
 import os
 import sys
 
-from PySide2.QtGui import QStandardItemModel, QStandardItem, QFontDatabase, QIcon, QSyntaxHighlighter, QTextCharFormat, QColor, QFont, QTextDocument, QPalette
-from PySide2.QtWidgets import *
-from PySide2 import QtCore, QtWidgets
+from PySide6.QtGui import QStandardItemModel, QStandardItem, QFontDatabase, QIcon, QSyntaxHighlighter, QTextCharFormat, QColor, QFont, QTextDocument, QPalette
+from PySide6.QtWidgets import *
+from PySide6 import QtCore, QtWidgets
 from statics import __version__, __appauthor__, __appname__
 
 logger = logging.getLogger(__name__)

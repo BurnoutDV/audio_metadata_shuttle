@@ -154,19 +154,15 @@ def _calc_console_widths_average_method(headers: list, data: list, max_width=0, 
     return set_len, stat
 
 
-def _calc_console_widths_absolute_method(headers: list, data: list, max_width=0, *column_widths: int):
+def _calc_console_widths_absolute_method(headers: list, data: list, max_width=0, columns_width=None):
     global __AVG_TOLERANCE, __COL_SPACING
     col, row = get_terminal_size()
     if max_width == 0 or max_width > col:
         max_width = col
     # default things we use later
     max1_len = defaultdict(int)
-    max2_len = defaultdict(int)
     val_list = defaultdict(list)
-    set_len = defaultdict(int)
     stat = defaultdict(int)
-    med_len = defaultdict(float)
-
     # maximum needed space
     for line in data:
         for col in headers:
@@ -177,6 +173,8 @@ def _calc_console_widths_absolute_method(headers: list, data: list, max_width=0,
                     max1_len[col] = tmp if tmp > max1_len[col] else max1_len[col]
                     val_list[col].append(tmp)
     # in case that the headers are bigger than the content
+    # * if column width set, divide avail_space by amount of set columns and make set_len static to those length for
+    # * the first get around
     max2_len = copy.copy(max1_len)
     for val in headers:
         max2_len[val] = len(val) if len(val) > max2_len[val] else max2_len[val]
@@ -188,44 +186,53 @@ def _calc_console_widths_absolute_method(headers: list, data: list, max_width=0,
     max_space = sum([x for x in max1_len.values()]) + space_len
     avail_space = max_width - space_len
 
-    missing_space = max_space - max_width
     # * edge case 1 - available space is not enough to even display all columns
     # * edge case 2 - there is enough space to show all content-lines
     # * edge case 3 - there is enough space to show all header & content-lines
     # * 'edge' case 4 - there is not enough space for all columns (this is what i actually expected to happen)
     # median of length, longest get available free space
-    med_len = {col: median(val_list[col]) for col in disp_cols if col in val_list}
-    var_len = {col: pvariance(val_list[col]) for col in disp_cols if col in val_list}
-    div_len = {col: pstdev(val_list[col]) for col in disp_cols if col in val_list}
-    # sort columns by highest value
-    med_len = {k: v for k, v in sorted(med_len.items(), key=lambda item: item[1], reverse=True)}
-    avg_len = mean([x for x in med_len.values()])  # technically the average of the median
-    long_cols = [col for col in disp_cols if max1_len[col] > avg_len]
-    num_long_col = len(long_cols)
-    vd_per_col = ceil(missing_space / num_long_col)  # void per column ( void as 'opposite' of space)
-    abs_vd = missing_space / num_long_col
-    while True:
-        long_cols = [col for col in long_cols if max1_len[col] > vd_per_col]  # every column has at least 1 char width
-        if len(long_cols) == num_long_col:
-            break
-        else:
-            num_long_col = len(long_cols)
-            vd_per_col = ceil(missing_space / num_long_col)
-    for col in disp_cols:
-        if col in long_cols:
-            set_len[col] = max1_len[col]-vd_per_col
-        else:
+    per_len = calc_distribution(val_list)
+    set_len = {col: floor(val*avail_space) for col, val in per_len.items()}
+    big_cols = []
+    for col in set_len:
+        if set_len[col] >= max1_len[col]:
             set_len[col] = max1_len[col]
-    # filling up to full width or taking from to make sure its always the entire line
-    col = next(iter(med_len.keys()))
-    set_len[col] += sum([x for _, x in set_len.items()]) - avail_space
-    print(f"{max_width=}, {missing_space=}, {vd_per_col=}({abs_vd:.2f}), Rest={sum([x for _, x in set_len.items()])}")
-    print("med", dict(med_len))
-    print("var", ", ".join([f"'{k}': {v:.2f}" for k, v in var_len.items()]))
-    print("div", ", ".join([f"'{k}': {v:.2f}" for k, v in div_len.items()]))
+        elif set_len[col] <= 0:  # a very tiny column will be at least partially displayed
+            set_len[col] = 1
+        else:
+            big_cols.append(col)
+    rest_space = avail_space - sum([x for x in set_len.values()])
+    num_big_cols = len(big_cols)
+    if num_big_cols <= 0:  # aka. there is enough space for ALL columns, we are not prioritizing headers because i
+                           # assume stuff like columns that only contain small numbers but big titles, in case we have
+                           # an abudance of space we now priotize padding rows with cut headers first before padding oth
+        for col in set_len:
+            mss_head_space = max2_len[col]-set_len[col]
+            if mss_head_space > 0:
+                if mss_head_space <= rest_space:
+                    set_len[col] += mss_head_space
+                    rest_space -= mss_head_space
+                else:
+                    set_len[col] += rest_space
+                    rest_space = 0
+            if rest_space == 0:
+                break
+        if rest_space > 0:  # there is still space to distribute
+            big_cols = [x for x in set_len]  # everyone is a big column now that is allowed to grow
+            num_big_cols = len(big_cols)
+    if num_big_cols > 0:  # if there is space left or big_cols
+        rst_per_col = floor(rest_space/num_big_cols)
+        for col in big_cols:
+            set_len[col] += rst_per_col
+        var_len = {col: pvariance(val_list[col]) for col in disp_cols if col in val_list}
+        var_len = {k: v for k, v in sorted(var_len.items(), key=lambda item: item[1], reverse=True)}
+        bigg = next(iter(var_len.keys()))
+        set_len[bigg] = set_len[bigg] + (avail_space - sum([x for x in set_len.values()]))
+    print(f"{max_width=}, Rest={sum([x for x in set_len.values()])}")
     print("set", dict(set_len))
     print("max", dict(max1_len))
-    print("dif", {x: max1_len[x]-set_len[x] for x in disp_cols})
+    print("dif", {x: max1_len[x] - set_len[x] for x in disp_cols})
+
     return set_len, stat
 
 
@@ -238,7 +245,7 @@ def calc_distribution(val_list: dict, method="median"):
     return {col: x/total_len for col, x in lens.items()}
 
 
-def simple_console_view(keys: list, data: list, max_width=0, *column_widths: int):
+def simple_console_view(keys: list, data: list, max_width=0, columns_width=None):
     r"""
     Displays a simple console view of any given data, will horribly break if too much data is supplied
 
@@ -253,19 +260,18 @@ def simple_console_view(keys: list, data: list, max_width=0, *column_widths: int
     set_len, stat = _calc_console_widths_absolute_method(keys, data, max_width)
     #set_len, stat = _calc_console_widths_average_method(keys, data, max_width)
     header = ""
-    for prop in keys:
+    for prop in set_len:
         header += f"{prop} [{stat[prop]}]{' '*set_len[prop]}"[:set_len[prop]] + " "*__COL_SPACING
     print(header[:-__COL_SPACING])
 
     for line in data:
         body = ""
-        for col in keys:
+        for i, col in enumerate(set_len):
             if col in line:
                 body += f"{line[col]}{' '*set_len[col]}"[:set_len[col]] + " "*__COL_SPACING
             else:
                 body += f"{' '*set_len[col]}"[:set_len[col]] + " "*__COL_SPACING
         print(body[:-__COL_SPACING])
-        break
 
 
 def super_simple_progress_bar(current_value, max_value, prefix="", suffix="", out=sys.stdout):
